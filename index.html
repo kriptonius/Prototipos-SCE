@@ -11,8 +11,8 @@
     font-family: 'Segoe UI', system-ui, Arial, sans-serif;
     background: #1e293b;
     color: #e2e8f0;
-    height: 100vh;   /* respaldo */
-    height: 100dvh;  /* altura real en móvil: el botón nunca queda tapado */
+    height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
   }
@@ -61,14 +61,43 @@
     flex: 1; display: flex; flex-direction: column;
     min-height: 0; background: #f8fafc;
   }
-  .zone-preview h2 {
-    flex-shrink: 0; padding: 12px 16px;
+
+  /* Barra de la vista previa con botones de expandir / cerrar */
+  .barra-preview {
+    flex-shrink: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; padding: 10px 16px;
     background: #e8edf5; border-bottom: 1px solid #cbd5e1;
     color: #475569; font-size: .9rem; letter-spacing: 1px;
   }
+  .botones-preview { display: flex; gap: 8px; flex-shrink: 0; }
+
+  .btn-icono {
+    width: 36px; height: 36px;
+    display: grid; place-items: center;
+    border: none; border-radius: 8px;
+    background: #6366f1; color: #fff;
+    cursor: pointer;
+  }
+  .btn-icono:hover { background: #4f46e5; }
+  #btnCerrar { background: #ef4444; }
+  #btnCerrar:hover { background: #dc2626; }
+  .oculto { display: none; }
+
   #preview { flex: 1; width: 100%; border: none; background: #fff; min-height: 0; }
 
-  /* Móvil: editor arriba (con su botón siempre visible) y preview abajo */
+  /* ✅ MODO PANORÁMICO: la vista previa lo cubre todo */
+  .zone-preview.expandida {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    animation: aparecer .25s ease;
+  }
+  @keyframes aparecer {
+    from { opacity: 0; transform: scale(.98); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
   @media (max-width: 760px) {
     main { flex-direction: column; }
     .zone-codigo { width: 100%; height: 46%; }
@@ -92,8 +121,23 @@
     </div>
   </section>
 
-  <section class="zone-preview">
-    <h2>VISTA PREVIA INTERACTIVA</h2>
+  <section class="zone-preview" id="zonePreview">
+    <div class="barra-preview">
+      <span>VISTA PREVIA INTERACTIVA</span>
+      <span class="botones-preview">
+        <button id="btnExpandir" class="btn-icono" title="Ver en pantalla completa">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/>
+            <path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+          </svg>
+        </button>
+        <button id="btnCerrar" class="btn-icono oculto" title="Volver al tamaño original">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M6 6l12 12M18 6L6 18"/>
+          </svg>
+        </button>
+      </span>
+    </div>
     <iframe id="preview" title="Vista previa"></iframe>
   </section>
 </main>
@@ -131,14 +175,44 @@
   area.value = prototipo;
 
   function ejecutar() {
-    marco.srcdoc = area.value;  // pinta HTML/CSS y ejecuta el JS dentro del iframe
+    marco.srcdoc = area.value;
   }
 
   document.getElementById('run').addEventListener('click', ejecutar);
-  ejecutar(); // ✅ auto-ejecuta al abrir: el cliente ve el prototipo de inmediato
+  ejecutar(); // auto-ejecuta al abrir
 
-  // Opcional: refrescar mientras escribes (descomenta si lo quieres)
-  // let t; area.addEventListener('input', () => { clearTimeout(t); t = setTimeout(ejecutar, 500); });
+  /* ===== MODO PANORÁMICO ===== */
+  const zona      = document.getElementById('zonePreview');
+  const btnAbrir  = document.getElementById('btnExpandir');
+  const btnCerrar = document.getElementById('btnCerrar');
+
+  function modoPantalla(completa) {
+    zona.classList.toggle('expandida', completa);
+    btnAbrir.classList.toggle('oculto', completa);
+    btnCerrar.classList.toggle('oculto', !completa);
+  }
+
+  function salir() {
+    modoPantalla(false);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+
+  btnAbrir.addEventListener('click', () => {
+    modoPantalla(true);
+    // Pantalla completa REAL (oculta barras del navegador);
+    // si el dispositivo no lo soporta, el overlay CSS ya cubre todo
+    if (zona.requestFullscreen) zona.requestFullscreen().catch(() => {});
+  });
+
+  btnCerrar.addEventListener('click', salir);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') salir(); });
+
+  // Si el cliente sale con el botón "atrás" del sistema, también se repliega
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && zona.classList.contains('expandida')) {
+      modoPantalla(false);
+    }
+  });
 </script>
 </body>
 </html>
