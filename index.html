@@ -47,22 +47,27 @@
     overflow: auto;
   }
 
-  .acciones { flex-shrink: 0; }
-  #run {
-    width: 100%; padding: 14px;
+  /* Barra de botones: Ejecutar + Guardar */
+  .acciones { flex-shrink: 0; display: flex; gap: 10px; }
+  .acciones button {
+    flex: 1;
+    padding: 14px 8px;
     border: none; border-radius: 10px;
-    background: #6366f1; color: #fff;
-    font-size: 1rem; font-weight: bold;
+    color: #fff;
+    font-size: .95rem; font-weight: bold;
     cursor: pointer;
+    white-space: nowrap;
   }
-  #run:active { transform: translateY(1px); }
+  .acciones button:active { transform: translateY(1px); }
+  #run     { background: #6366f1; }
+  #guardar { background: #10b981; }
+  #guardar:listo { background: #059669; }
 
   .zone-preview {
     flex: 1; display: flex; flex-direction: column;
     min-height: 0; background: #f8fafc;
   }
 
-  /* Barra de la vista previa con botones de expandir / cerrar */
   .barra-preview {
     flex-shrink: 0;
     display: flex; justify-content: space-between; align-items: center;
@@ -86,7 +91,7 @@
 
   #preview { flex: 1; width: 100%; border: none; background: #fff; min-height: 0; }
 
-  /* ✅ MODO PANORÁMICO: la vista previa lo cubre todo */
+  /* MODO PANORÁMICO */
   .zone-preview.expandida {
     position: fixed;
     inset: 0;
@@ -117,7 +122,8 @@
     <h2>CÓDIGO DEL PROTOTIPO (HTML/CSS/JS)</h2>
     <textarea id="codigo" spellcheck="false"></textarea>
     <div class="acciones">
-      <button id="run">▶ EJECUTAR PROTOTIPO</button>
+      <button id="run">▶ EJECUTAR</button>
+      <button id="guardar">💾 GUARDAR .HTML</button>
     </div>
   </section>
 
@@ -177,9 +183,35 @@
   function ejecutar() {
     marco.srcdoc = area.value;
   }
-
   document.getElementById('run').addEventListener('click', ejecutar);
   ejecutar(); // auto-ejecuta al abrir
+
+  /* ===== 💾 GUARDAR COMO ARCHIVO .HTML ===== */
+  document.getElementById('guardar').addEventListener('click', function () {
+    let nombre = prompt('Nombre del archivo (sin extensión):', 'prototipo-salvatore');
+    if (nombre === null) return; // canceló
+
+    // limpia caracteres prohibidos en nombres de archivo
+    nombre = nombre.trim().replace(/[\\/:*?"<>|]+/g, '-');
+    if (!nombre) nombre = 'prototipo-salvatore';
+    if (!nombre.toLowerCase().endsWith('.html')) nombre += '.html';
+
+    const blob = new Blob([area.value], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = nombre;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    // feedback visual breve
+    const btn = this;
+    const textoOriginal = btn.innerHTML;
+    btn.innerHTML = '✅ ARCHIVO CREADO';
+    setTimeout(() => { btn.innerHTML = textoOriginal; }, 1500);
+  });
 
   /* ===== MODO PANORÁMICO ===== */
   const zona      = document.getElementById('zonePreview');
@@ -191,7 +223,6 @@
     btnAbrir.classList.toggle('oculto', completa);
     btnCerrar.classList.toggle('oculto', !completa);
   }
-
   function salir() {
     modoPantalla(false);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -199,15 +230,10 @@
 
   btnAbrir.addEventListener('click', () => {
     modoPantalla(true);
-    // Pantalla completa REAL (oculta barras del navegador);
-    // si el dispositivo no lo soporta, el overlay CSS ya cubre todo
     if (zona.requestFullscreen) zona.requestFullscreen().catch(() => {});
   });
-
   btnCerrar.addEventListener('click', salir);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') salir(); });
-
-  // Si el cliente sale con el botón "atrás" del sistema, también se repliega
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement && zona.classList.contains('expandida')) {
       modoPantalla(false);
