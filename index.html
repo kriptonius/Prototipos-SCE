@@ -47,21 +47,24 @@
     overflow: auto;
   }
 
-  /* Barra de botones: Ejecutar + Guardar */
-  .acciones { flex-shrink: 0; display: flex; gap: 10px; }
+  /* Barra de botones */
+  .acciones { flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
   .acciones button {
-    flex: 1;
-    padding: 14px 8px;
     border: none; border-radius: 10px;
-    color: #fff;
-    font-size: .95rem; font-weight: bold;
-    cursor: pointer;
+    font-weight: bold; cursor: pointer;
     white-space: nowrap;
   }
   .acciones button:active { transform: translateY(1px); }
-  #run     { background: #6366f1; }
-  #guardar { background: #10b981; }
-  #guardar:listo { background: #059669; }
+
+  .fila-principal { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; }
+  #run    { padding: 14px; background: #6366f1; color: #fff; font-size: 1rem; }
+  #cargar { padding: 14px; background: #0ea5e9; color: #fff; font-size: .95rem; }
+
+  .fila-guardado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .fila-guardado button { padding: 12px 4px; font-size: .88rem; }
+  #guardarHtml { background: #10b981; color: #fff; }
+  #guardarJson { background: #f59e0b; color: #fff; }
+  #guardarJs   { background: #f7df1e; color: #1e293b; }
 
   .zone-preview {
     flex: 1; display: flex; flex-direction: column;
@@ -105,7 +108,7 @@
 
   @media (max-width: 760px) {
     main { flex-direction: column; }
-    .zone-codigo { width: 100%; height: 46%; }
+    .zone-codigo { width: 100%; height: 52%; }
     .zone-preview { flex: 1; }
   }
 </style>
@@ -122,9 +125,17 @@
     <h2>CÓDIGO DEL PROTOTIPO (HTML/CSS/JS)</h2>
     <textarea id="codigo" spellcheck="false"></textarea>
     <div class="acciones">
-      <button id="run">▶ EJECUTAR</button>
-      <button id="guardar">💾 GUARDAR .HTML</button>
+      <div class="fila-principal">
+        <button id="run">▶ EJECUTAR</button>
+        <button id="cargar">📂 CARGAR</button>
+      </div>
+      <div class="fila-guardado">
+        <button id="guardarHtml">💾 HTML</button>
+        <button id="guardarJson">💾 JSON</button>
+        <button id="guardarJs">💾 JS</button>
+      </div>
     </div>
+    <input type="file" id="inputArchivo" accept=".html,.htm,.json,.js,.css,.txt" hidden>
   </section>
 
   <section class="zone-preview" id="zonePreview">
@@ -186,17 +197,15 @@
   document.getElementById('run').addEventListener('click', ejecutar);
   ejecutar(); // auto-ejecuta al abrir
 
-  /* ===== 💾 GUARDAR COMO ARCHIVO .HTML ===== */
-  document.getElementById('guardar').addEventListener('click', function () {
-    let nombre = prompt('Nombre del archivo (sin extensión):', 'prototipo-salvatore');
-    if (nombre === null) return; // canceló
+  /* ===== utilidades ===== */
+  function feedback(btn, texto) {
+    const original = btn.innerHTML;
+    btn.innerHTML = texto;
+    setTimeout(() => { btn.innerHTML = original; }, 1500);
+  }
 
-    // limpia caracteres prohibidos en nombres de archivo
-    nombre = nombre.trim().replace(/[\\/:*?"<>|]+/g, '-');
-    if (!nombre) nombre = 'prototipo-salvatore';
-    if (!nombre.toLowerCase().endsWith('.html')) nombre += '.html';
-
-    const blob = new Blob([area.value], { type: 'text/html' });
+  function descargarArchivo(nombre, contenido, mime) {
+    const blob = new Blob([contenido], { type: mime });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url;
@@ -205,12 +214,93 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
-    // feedback visual breve
-    const btn = this;
-    const textoOriginal = btn.innerHTML;
-    btn.innerHTML = '✅ ARCHIVO CREADO';
-    setTimeout(() => { btn.innerHTML = textoOriginal; }, 1500);
+  /* ===== 💾 GUARDADO MULTI-FORMATO ===== */
+  function construirJson(nombre) {
+    const crudo = area.value;
+    try {
+      const obj = JSON.parse(crudo);
+      // Si ya es un catálogo del Lab, actualiza nombre/fecha sin anidar
+      if (obj && typeof obj === 'object' && typeof obj.html === 'string') {
+        obj.nombre = nombre;
+        obj.fecha  = new Date().toISOString();
+        return JSON.stringify(obj, null, 2);
+      }
+      return crudo; // ya era JSON válido del usuario: se respeta tal cual
+    } catch (e) {
+      // No es JSON → lo empaqueta como catálogo de prototipo
+      return JSON.stringify({
+        tipo:  'prototipo-salvatore',
+        nombre: nombre,
+        fecha: new Date().toISOString(),
+        html:  crudo
+      }, null, 2);
+    }
+  }
+
+  function guardarComo(ext, mime, btn) {
+    let nombre = prompt('Nombre del archivo (sin extensión):', 'prototipo-salvatore');
+    if (nombre === null) return; // canceló
+    const base = nombre.trim().replace(/[\\/:*?"<>|]+/g, '-') || 'prototipo-salvatore';
+
+    let contenido = area.value;
+
+    if (ext === 'json') {
+      contenido = construirJson(base); // siempre produce JSON válido
+    } else if (ext === 'js' && /<\/?[a-z!]/i.test(contenido)) {
+      if (!confirm('⚠️ El contenido parece HTML, no JavaScript.\n¿Guardar de todos modos?')) return;
+    }
+
+    let archivo = base;
+    if (!archivo.toLowerCase().endsWith('.' + ext)) archivo += '.' + ext;
+
+    descargarArchivo(archivo, contenido, mime);
+    feedback(btn, '✅ CREADO');
+  }
+
+  document.getElementById('guardarHtml').addEventListener('click', function () {
+    guardarComo('html', 'text/html', this);
+  });
+  document.getElementById('guardarJson').addEventListener('click', function () {
+    guardarComo('json', 'application/json', this);
+  });
+  document.getElementById('guardarJs').addEventListener('click', function () {
+    guardarComo('js', 'text/javascript', this);
+  });
+
+  /* ===== 📂 CARGAR ARCHIVO AL EDITOR ===== */
+  const inputArchivo = document.getElementById('inputArchivo');
+  const btnCargar    = document.getElementById('cargar');
+
+  btnCargar.addEventListener('click', () => inputArchivo.click());
+
+  inputArchivo.addEventListener('change', () => {
+    const file = inputArchivo.files[0];
+    if (!file) return;
+
+    const lector = new FileReader();
+    lector.onload = () => {
+      let texto   = String(lector.result);
+      let mensaje = '✅ CARGADO';
+
+      // Si es un catálogo JSON del Lab, restaura el prototipo empaquetado
+      if (/\.json$/i.test(file.name)) {
+        try {
+          const obj = JSON.parse(texto);
+          if (obj && typeof obj === 'object' && typeof obj.html === 'string') {
+            texto   = obj.html;
+            mensaje = '✅ PROTOTIPO RESTAURADO';
+          }
+        } catch (e) { /* JSON crudo: se muestra tal cual */ }
+      }
+
+      area.value = texto;
+      if (/<[a-z!]/i.test(texto)) ejecutar(); // si es HTML, lo muestra al instante
+      feedback(btnCargar, mensaje);
+      inputArchivo.value = '';
+    };
+    lector.readAsText(file);
   });
 
   /* ===== MODO PANORÁMICO ===== */
