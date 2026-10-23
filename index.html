@@ -37,7 +37,6 @@
   }
   .zone-codigo h2 { font-size: .9rem; letter-spacing: .5px; color: #cbd5e1; }
 
-  /* Selector de modo */
   .modos { display: flex; gap: 8px; flex-shrink: 0; }
   .modo {
     flex: 1; padding: 10px 6px;
@@ -58,7 +57,6 @@
     overflow: auto;
   }
 
-  /* Barra de botones */
   .acciones { flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
   .acciones button {
     border: none; border-radius: 10px;
@@ -105,7 +103,6 @@
 
   #preview { flex: 1; width: 100%; border: none; background: #fff; min-height: 0; }
 
-  /* MODO PANORÁMICO */
   .zone-preview.expandida {
     position: fixed;
     inset: 0;
@@ -267,12 +264,11 @@ function TarjetaBoton() {
   btnModoHtml.addEventListener('click', () => cambiarModo('html'));
   btnModoReact.addEventListener('click', () => cambiarModo('react'));
 
-  /* ===== plantilla que ejecuta React + JSX dentro del iframe ===== */
+  /* ===== plantilla React robusta (multi-CDN + Babel manual) ===== */
   function plantillaReact(codigoCrudo) {
     let codigo = codigoCrudo;
     let nombreExport = '';
 
-    // quita imports (React ya está global) y captura export default
     const habiaImportReact = /import\s+[\s\S]*?from\s*['"]react['"]/.test(codigo);
     codigo = codigo.replace(/import\s+[\s\S]*?from\s*['"][^'"]+['"]\s*;?/g, '');
     codigo = codigo.replace(/import\s*['"][^'"]+['"]\s*;?/g, '');
@@ -280,49 +276,18 @@ function TarjetaBoton() {
     codigo = codigo.replace(/export\s+default\s+/g, '');
     codigo = codigo.replace(/export\s+(const|let|var|function|class)\s+/g, '$1 ');
 
-    // si usaba hooks "sueltos" (useState(...)), se proveen desde React global
     const usaHooksSueltos = habiaImportReact ||
       /(^|[^.\w])(useState|useEffect|useRef|useMemo|useCallback|useReducer|useContext)\s*\(/.test(codigo);
-    const lineaHooks = usaHooksSueltos
-      ? 'const { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext, createContext, Fragment } = React;\n'
-      : '';
-
-    return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"><\/script>
-<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"><\/script>
-<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"><\/script>
-<style>
-  body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; background: #f4f4f9; }
-  #root { min-height: 100vh; }
-<\/style>
-</head>
-<body>
-<div id="root"></div>
-<script>
-  window.__ANTES__ = Object.getOwnPropertyNames(window);
-  (function () {
-    var origCreate = ReactDOM.createRoot.bind(ReactDOM);
-    ReactDOM.createRoot = function (el) { window.__MONTADO__ = true; return origCreate(el); };
-    if (ReactDOM.render) {
-      var origRender = ReactDOM.render.bind(ReactDOM);
-      ReactDOM.render = function (el, cont) { window.__MONTADO__ = true; return origRender(el, cont); };
+    if (usaHooksSueltos) {
+      codigo = 'const { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext, createContext, Fragment } = React;\n' + codigo;
     }
-    window.addEventListener('error', function (e) {
-      var d = document.createElement('pre');
-      d.style.cssText = 'color:#dc2626;background:#fee2e2;padding:14px;font-family:monospace;white-space:pre-wrap;position:fixed;inset:0;overflow:auto;margin:0;z-index:9999';
-      d.textContent = '⚠️ Error en el prototipo React:\\n' + (e.message || e.error || 'Error desconocido');
-      document.body.appendChild(d);
-    });
-  })();
-<\/script>
-<script type="text/babel" data-presets="env,react">
-${lineaHooks}${codigo}
+
+    const codigoSeguro = JSON.stringify(codigo).replace(/</g, '\\u003c');
+
+    const montaje = `
 ;(function () {
   if (window.__MONTADO__) return;
+  if (typeof ReactDOM === 'undefined') return;
   var candidato = null;
   var nombres = ['${nombreExport}', 'App', 'Componente', 'Prototipo', 'Demo', 'Main', 'Pantalla'].filter(Boolean);
   for (var i = 0; i < nombres.length; i++) {
@@ -340,12 +305,123 @@ ${lineaHooks}${codigo}
   if (candidato) {
     ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(candidato));
   } else {
-    var aviso = document.createElement('pre');
-    aviso.style.cssText = 'color:#b45309;background:#fef3c7;padding:14px;font-family:monospace;white-space:pre-wrap;margin:0';
-    aviso.textContent = '⚛️ React cargado, pero no supe qué componente montar.\\nOpciones:\\n1) Nombra tu componente principal "App", o\\n2) Monta tú al final del código:\\n   ReactDOM.createRoot(document.getElementById("root")).render(<TuComponente />);';
-    document.getElementById('root').appendChild(aviso);
+    window.__mostrarErrorProto('React cargado, pero no supe qué componente montar.\\nOpciones:\\n1) Nombra tu componente principal "App", o\\n2) Monta tú al final:\\n   ReactDOM.createRoot(document.getElementById("root")).render(<TuComponente />);', '#b45309', '#fef3c7');
   }
-})();
+})();`;
+
+    const montajeSeguro = JSON.stringify(montaje).replace(/</g, '\\u003c');
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; background: #f4f4f9; }
+  #root { min-height: 100vh; }
+  #cargando {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center;
+    background: #f4f4f9; color: #6366f1;
+    font-weight: bold; font-family: system-ui, sans-serif;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="cargando">⚛️ Cargando React…</div>
+<script>
+  window.__ANTES__   = Object.getOwnPropertyNames(window);
+  window.__CODIGO__  = ${codigoSeguro};
+  window.__MONTAJE__ = ${montajeSeguro};
+
+  function mostrarErrorProto(msg, fg, bg) {
+    var c = document.getElementById('cargando'); if (c) c.remove();
+    var d = document.createElement('pre');
+    d.style.cssText = 'color:' + (fg || '#dc2626') + ';background:' + (bg || '#fee2e2') +
+      ';padding:14px;font-family:monospace;white-space:pre-wrap;position:fixed;inset:0;overflow:auto;margin:0;z-index:9999';
+    d.textContent = msg;
+    document.body.appendChild(d);
+  }
+  window.__mostrarErrorProto = mostrarErrorProto;
+
+  window.addEventListener('error', function (e) {
+    var extra = (e.message === 'Script error.')
+      ? '\\n(error sin detalles: suele ser un CDN bloqueado por la red o un bloqueador)'
+      : '';
+    mostrarErrorProto('⚠️ Error en el prototipo React:\\n' + (e.message || e.error || 'Error desconocido') + extra);
+  });
+
+  var LIBS = {
+    react: [
+      'https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js',
+      'https://unpkg.com/react@18.3.1/umd/react.production.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js'
+    ],
+    reactdom: [
+      'https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js',
+      'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js'
+    ],
+    babel: [
+      'https://cdn.jsdelivr.net/npm/@babel/standalone@7.26.4/babel.min.js',
+      'https://unpkg.com/@babel/standalone@7.26.4/babel.min.js'
+    ]
+  };
+
+  function cargar(urls, i, ok) {
+    if (i >= urls.length) { ok(false); return; }
+    var s = document.createElement('script');
+    s.src = urls[i];
+    s.crossOrigin = 'anonymous';
+    s.onload  = function () { ok(true); };
+    s.onerror = function () { s.remove(); cargar(urls, i + 1, ok); };
+    document.head.appendChild(s);
+  }
+
+  var listo = false;
+  setTimeout(function () {
+    if (!listo && !document.querySelector('pre')) {
+      mostrarErrorProto('⚠️ Los CDN de React/Babel no responden (conexión lenta o bloqueador).\\nPulsa ▶ EJECUTAR para reintentar.');
+    }
+  }, 20000);
+
+  cargar(LIBS.react, 0, function (okR) {
+    if (!okR) return mostrarErrorProto('⚠️ No se pudo descargar React desde ningún CDN.\\nRevisa tu conexión y pulsa ▶ EJECUTAR para reintentar.');
+    cargar(LIBS.reactdom, 0, function (okD) {
+      if (!okD) return mostrarErrorProto('⚠️ No se pudo descargar ReactDOM desde ningún CDN.\\nRevisa tu conexión y pulsa ▶ EJECUTAR para reintentar.');
+      (function () {
+        var origCreate = ReactDOM.createRoot.bind(ReactDOM);
+        ReactDOM.createRoot = function (el) {
+          window.__MONTADO__ = true;
+          var c = document.getElementById('cargando'); if (c) c.remove();
+          return origCreate(el);
+        };
+        if (ReactDOM.render) {
+          var origRender = ReactDOM.render.bind(ReactDOM);
+          ReactDOM.render = function (el, cont) {
+            window.__MONTADO__ = true;
+            var c = document.getElementById('cargando'); if (c) c.remove();
+            return origRender(el, cont);
+          };
+        }
+      })();
+      cargar(LIBS.babel, 0, function (okB) {
+        if (!okB) return mostrarErrorProto('⚠️ No se pudo descargar Babel desde ningún CDN.\\nRevisa tu conexión y pulsa ▶ EJECUTAR para reintentar.');
+        listo = true;
+        var c = document.getElementById('cargando'); if (c) c.remove();
+        var out;
+        try {
+          out = Babel.transform(window.__CODIGO__, { presets: ['env', 'react'] }).code;
+        } catch (err) {
+          return mostrarErrorProto('⚠️ Error de sintaxis en tu código JSX/JS:\\n' + err.message);
+        }
+        var s = document.createElement('script');
+        s.text = out + '\\n' + window.__MONTAJE__;
+        document.body.appendChild(s);
+      });
+    });
+  });
 <\/script>
 </body>
 </html>`;
@@ -408,7 +484,7 @@ ${lineaHooks}${codigo}
     if (ext === 'json') {
       contenido = construirJson(base);
     } else if (ext === 'html' && modoActual === 'react') {
-      contenido = plantillaReact(area.value); // HTML autónomo con React incluido
+      contenido = plantillaReact(area.value);
     } else {
       contenido = area.value;
       if (ext === 'js') {
