@@ -3,14 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#6366f1">
-<link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Lab Salvatore">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Lab de Prototipos SALVATORE 🚀</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,6 +36,17 @@
     padding: 16px; min-height: 0;
   }
   .zone-codigo h2 { font-size: .9rem; letter-spacing: .5px; color: #cbd5e1; }
+
+  /* Selector de modo */
+  .modos { display: flex; gap: 8px; flex-shrink: 0; }
+  .modo {
+    flex: 1; padding: 10px 6px;
+    border: 1px solid #334155; border-radius: 10px;
+    background: #0b1120; color: #94a3b8;
+    font-weight: bold; font-size: .82rem; cursor: pointer;
+    white-space: nowrap;
+  }
+  .modo.activo { background: #6366f1; border-color: #6366f1; color: #fff; }
 
   #codigo {
     flex: 1; min-height: 0;
@@ -116,7 +119,7 @@
 
   @media (max-width: 760px) {
     main { flex-direction: column; }
-    .zone-codigo { width: 100%; height: 52%; }
+    .zone-codigo { width: 100%; height: 55%; }
     .zone-preview { flex: 1; }
   }
 </style>
@@ -130,7 +133,11 @@
 
 <main>
   <section class="zone-codigo">
-    <h2>CÓDIGO DEL PROTOTIPO (HTML/CSS/JS)</h2>
+    <h2>CÓDIGO DEL PROTOTIPO</h2>
+    <div class="modos">
+      <button id="modoHtml" class="modo activo">🌐 HTML / CSS / JS</button>
+      <button id="modoReact" class="modo">⚛️ REACT (JSX)</button>
+    </div>
     <textarea id="codigo" spellcheck="false"></textarea>
     <div class="acciones">
       <div class="fila-principal">
@@ -143,7 +150,7 @@
         <button id="guardarJs">💾 JS</button>
       </div>
     </div>
-    <input type="file" id="inputArchivo" accept=".html,.htm,.json,.js,.css,.txt" hidden>
+    <input type="file" id="inputArchivo" accept=".html,.htm,.json,.js,.jsx,.css,.txt" hidden>
   </section>
 
   <section class="zone-preview" id="zonePreview">
@@ -168,6 +175,7 @@
 </main>
 
 <script>
+  /* ===== ejemplos por defecto ===== */
   const prototipo = `<!DOCTYPE html>
 <html>
 <head>
@@ -194,16 +202,160 @@
 </body>
 </html>`;
 
+  const ejemploReact = `// Prototipo React de ejemplo ✨
+function TarjetaBoton() {
+  const [clics, setClics] = React.useState(0);
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: '18px',
+      background: '#f4f4f9',
+      fontFamily: 'Arial, sans-serif'
+    }}>
+      <button
+        onClick={() => setClics(c => c + 1)}
+        style={{
+          background: 'linear-gradient(135deg, #ff416c, #ff4b2b)',
+          color: '#ffffff',
+          fontSize: '16px',
+          fontWeight: 'bold',
+          padding: '14px 28px',
+          border: 'none',
+          borderRadius: '50px',
+          cursor: 'pointer',
+          boxShadow: '0 4px 15px rgba(255,75,43,0.4)',
+          textTransform: 'uppercase',
+          letterSpacing: '1px'
+        }}
+      >
+        GENIAL ENTRA YA
+      </button>
+      <p style={{ color: '#475569' }}>
+        El botón genial lleva <strong>{clics}</strong> clics ✅
+      </p>
+    </div>
+  );
+}`;
+
   const area  = document.getElementById('codigo');
   const marco = document.getElementById('preview');
-
   area.value = prototipo;
 
+  /* ===== modo HTML / REACT ===== */
+  let modoActual = 'html';
+  const btnModoHtml  = document.getElementById('modoHtml');
+  const btnModoReact = document.getElementById('modoReact');
+
+  function fijarModo(modo) {
+    modoActual = modo;
+    btnModoHtml.classList.toggle('activo', modo === 'html');
+    btnModoReact.classList.toggle('activo', modo === 'react');
+  }
+
+  function cambiarModo(modo) {
+    if (modoActual === modo) return;
+    if (modo === 'react' && area.value.trim() === prototipo.trim()) area.value = ejemploReact;
+    else if (modo === 'html' && area.value.trim() === ejemploReact.trim()) area.value = prototipo;
+    fijarModo(modo);
+    ejecutar();
+  }
+  btnModoHtml.addEventListener('click', () => cambiarModo('html'));
+  btnModoReact.addEventListener('click', () => cambiarModo('react'));
+
+  /* ===== plantilla que ejecuta React + JSX dentro del iframe ===== */
+  function plantillaReact(codigoCrudo) {
+    let codigo = codigoCrudo;
+    let nombreExport = '';
+
+    // quita imports (React ya está global) y captura export default
+    const habiaImportReact = /import\s+[\s\S]*?from\s*['"]react['"]/.test(codigo);
+    codigo = codigo.replace(/import\s+[\s\S]*?from\s*['"][^'"]+['"]\s*;?/g, '');
+    codigo = codigo.replace(/import\s*['"][^'"]+['"]\s*;?/g, '');
+    codigo = codigo.replace(/export\s+default\s+([A-Za-z_$][\w$]*)\s*;?/g, function (m, n) { nombreExport = n; return ''; });
+    codigo = codigo.replace(/export\s+default\s+/g, '');
+    codigo = codigo.replace(/export\s+(const|let|var|function|class)\s+/g, '$1 ');
+
+    // si usaba hooks "sueltos" (useState(...)), se proveen desde React global
+    const usaHooksSueltos = habiaImportReact ||
+      /(^|[^.\w])(useState|useEffect|useRef|useMemo|useCallback|useReducer|useContext)\s*\(/.test(codigo);
+    const lineaHooks = usaHooksSueltos
+      ? 'const { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext, createContext, Fragment } = React;\n'
+      : '';
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"><\/script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"><\/script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"><\/script>
+<style>
+  body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; background: #f4f4f9; }
+  #root { min-height: 100vh; }
+<\/style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  window.__ANTES__ = Object.getOwnPropertyNames(window);
+  (function () {
+    var origCreate = ReactDOM.createRoot.bind(ReactDOM);
+    ReactDOM.createRoot = function (el) { window.__MONTADO__ = true; return origCreate(el); };
+    if (ReactDOM.render) {
+      var origRender = ReactDOM.render.bind(ReactDOM);
+      ReactDOM.render = function (el, cont) { window.__MONTADO__ = true; return origRender(el, cont); };
+    }
+    window.addEventListener('error', function (e) {
+      var d = document.createElement('pre');
+      d.style.cssText = 'color:#dc2626;background:#fee2e2;padding:14px;font-family:monospace;white-space:pre-wrap;position:fixed;inset:0;overflow:auto;margin:0;z-index:9999';
+      d.textContent = '⚠️ Error en el prototipo React:\\n' + (e.message || e.error || 'Error desconocido');
+      document.body.appendChild(d);
+    });
+  })();
+<\/script>
+<script type="text/babel" data-presets="env,react">
+${lineaHooks}${codigo}
+;(function () {
+  if (window.__MONTADO__) return;
+  var candidato = null;
+  var nombres = ['${nombreExport}', 'App', 'Componente', 'Prototipo', 'Demo', 'Main', 'Pantalla'].filter(Boolean);
+  for (var i = 0; i < nombres.length; i++) {
+    try {
+      var v = (0, eval)(nombres[i]);
+      if (typeof v === 'function' || (typeof v === 'object' && v !== null)) { candidato = v; break; }
+    } catch (e) {}
+  }
+  if (!candidato) {
+    var antes = window.__ANTES__ || [];
+    for (var k in window) {
+      if (antes.indexOf(k) === -1 && /^[A-Z]/.test(k) && typeof window[k] === 'function') { candidato = window[k]; break; }
+    }
+  }
+  if (candidato) {
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(candidato));
+  } else {
+    var aviso = document.createElement('pre');
+    aviso.style.cssText = 'color:#b45309;background:#fef3c7;padding:14px;font-family:monospace;white-space:pre-wrap;margin:0';
+    aviso.textContent = '⚛️ React cargado, pero no supe qué componente montar.\\nOpciones:\\n1) Nombra tu componente principal "App", o\\n2) Monta tú al final del código:\\n   ReactDOM.createRoot(document.getElementById("root")).render(<TuComponente />);';
+    document.getElementById('root').appendChild(aviso);
+  }
+})();
+<\/script>
+</body>
+</html>`;
+  }
+
   function ejecutar() {
-    marco.srcdoc = area.value;
+    marco.srcdoc = (modoActual === 'react') ? plantillaReact(area.value) : area.value;
   }
   document.getElementById('run').addEventListener('click', ejecutar);
-  ejecutar(); // auto-ejecuta al abrir
+  ejecutar();
 
   /* ===== utilidades ===== */
   function feedback(btn, texto) {
@@ -229,17 +381,17 @@
     const crudo = area.value;
     try {
       const obj = JSON.parse(crudo);
-      // Si ya es un catálogo del Lab, actualiza nombre/fecha sin anidar
       if (obj && typeof obj === 'object' && typeof obj.html === 'string') {
         obj.nombre = nombre;
         obj.fecha  = new Date().toISOString();
+        obj.modo   = modoActual;
         return JSON.stringify(obj, null, 2);
       }
-      return crudo; // ya era JSON válido del usuario: se respeta tal cual
+      return crudo;
     } catch (e) {
-      // No es JSON → lo empaqueta como catálogo de prototipo
       return JSON.stringify({
         tipo:  'prototipo-salvatore',
+        modo:  modoActual,
         nombre: nombre,
         fecha: new Date().toISOString(),
         html:  crudo
@@ -249,20 +401,27 @@
 
   function guardarComo(ext, mime, btn) {
     let nombre = prompt('Nombre del archivo (sin extensión):', 'prototipo-salvatore');
-    if (nombre === null) return; // canceló
+    if (nombre === null) return;
     const base = nombre.trim().replace(/[\\/:*?"<>|]+/g, '-') || 'prototipo-salvatore';
 
-    let contenido = area.value;
-
+    let contenido;
     if (ext === 'json') {
-      contenido = construirJson(base); // siempre produce JSON válido
-    } else if (ext === 'js' && /<\/?[a-z!]/i.test(contenido)) {
-      if (!confirm('⚠️ El contenido parece HTML, no JavaScript.\n¿Guardar de todos modos?')) return;
+      contenido = construirJson(base);
+    } else if (ext === 'html' && modoActual === 'react') {
+      contenido = plantillaReact(area.value); // HTML autónomo con React incluido
+    } else {
+      contenido = area.value;
+      if (ext === 'js') {
+        if (modoActual === 'react') {
+          if (!confirm('ℹ️ Se guardará el JSX tal cual (necesita React/Babel para funcionar). ¿Continuar?')) return;
+        } else if (/<\/?[a-z!]/i.test(contenido)) {
+          if (!confirm('⚠️ El contenido parece HTML, no JavaScript. ¿Guardar de todos modos?')) return;
+        }
+      }
     }
 
     let archivo = base;
     if (!archivo.toLowerCase().endsWith('.' + ext)) archivo += '.' + ext;
-
     descargarArchivo(archivo, contenido, mime);
     feedback(btn, '✅ CREADO');
   }
@@ -277,7 +436,7 @@
     guardarComo('js', 'text/javascript', this);
   });
 
-  /* ===== 📂 CARGAR ARCHIVO AL EDITOR ===== */
+  /* ===== 📂 CARGAR ARCHIVO ===== */
   const inputArchivo = document.getElementById('inputArchivo');
   const btnCargar    = document.getElementById('cargar');
 
@@ -292,19 +451,21 @@
       let texto   = String(lector.result);
       let mensaje = '✅ CARGADO';
 
-      // Si es un catálogo JSON del Lab, restaura el prototipo empaquetado
       if (/\.json$/i.test(file.name)) {
         try {
           const obj = JSON.parse(texto);
           if (obj && typeof obj === 'object' && typeof obj.html === 'string') {
             texto   = obj.html;
             mensaje = '✅ PROTOTIPO RESTAURADO';
+            if (obj.modo === 'react' || obj.modo === 'html') fijarModo(obj.modo);
           }
-        } catch (e) { /* JSON crudo: se muestra tal cual */ }
+        } catch (e) { /* JSON crudo */ }
+      } else if (/\.jsx$/i.test(file.name)) {
+        fijarModo('react');
       }
 
       area.value = texto;
-      if (/<[a-z!]/i.test(texto)) ejecutar(); // si es HTML, lo muestra al instante
+      if (modoActual === 'react' || /<[a-z!]/i.test(texto)) ejecutar();
       feedback(btnCargar, mensaje);
       inputArchivo.value = '';
     };
@@ -337,13 +498,6 @@
       modoPantalla(false);
     }
   });
-
-  /* ===== PWA: service worker ===== */
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    });
-  }
 </script>
 </body>
 </html>
